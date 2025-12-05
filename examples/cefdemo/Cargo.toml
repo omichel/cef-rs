@@ -1,0 +1,29 @@
+[package]
+name = "cefdemo"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "cefdemo"
+
+[[bin]]
+name = "cefdemo_helper"
+path = "src/mac/helper.rs"
+
+[[bin]]
+name = "bundle_cefdemo"
+path = "src/mac/bundle_cefdemo.rs"
+
+[features]
+default = ["sandbox"]
+sandbox = ["cef/sandbox"]
+
+[dependencies]
+cef.workspace = true
+cef-dll-sys.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+plist.workspace = true
+serde.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = ["NSApplication", "NSResponder"] }
