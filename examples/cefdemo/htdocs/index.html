@@ -18,6 +18,7 @@
       .container {
         text-align: center;
         padding: 2rem;
+        max-width: 800px;
       }
       h1 {
         font-size: 2.5rem;
@@ -27,6 +28,20 @@
         font-size: 1.2rem;
         opacity: 0.9;
       }
+      .demo-section {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+      }
+      .demo-section h2 {
+        font-size: 1.4rem;
+        margin-bottom: 0.5rem;
+      }
+      .demo-section p {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+      }
       button {
         background: white;
         color: #667eea;
@@ -35,7 +50,7 @@
         font-size: 1.1rem;
         border-radius: 8px;
         cursor: pointer;
-        margin-top: 1.5rem;
+        margin: 0.5rem;
         transition:
           transform 0.2s,
           box-shadow 0.2s;
@@ -44,37 +59,67 @@
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
-      #result {
-        margin-top: 1.5rem;
+      .result {
+        margin-top: 1rem;
         padding: 1rem;
         background: rgba(255, 255, 255, 0.2);
         border-radius: 8px;
-        font-size: 1.3rem;
-        min-height: 2rem;
+        font-size: 1.1rem;
+        min-height: 1.5rem;
+        cursor: pointer;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>Hello from CEF!</h1>
-      <p>This is a local HTML page loaded in the Chromium Embedded Framework.</p>
-      <p>Click the button below to call a Rust function from JavaScript:</p>
-      <button onclick="callRustFunction()">Call Rust Hello World</button>
-      <div id="result"></div>
+      <h1>CEF Rust-JavaScript Bridge Demo</h1>
+      <p>This demo shows bidirectional communication between Rust and JavaScript.</p>
+
+      <div class="demo-section">
+        <h2>1. JavaScript → Rust</h2>
+        <p>Call a Rust function from JavaScript and get a return value:</p>
+        <button onclick="callRustFunction()">Call rust.helloWorld()</button>
+        <div id="result1" class="result" onclick="this.textContent=''"></div>
+      </div>
+
+      <div class="demo-section">
+        <h2>2. Rust → JavaScript</h2>
+        <p>Trigger Rust code that calls a JavaScript function:</p>
+        <button onclick="triggerRustCallback()">Call rust.triggerCallback()</button>
+        <div id="result2" class="result" onclick="this.textContent=''"></div>
+      </div>
     </div>
 
     <script>
+      // Demo 1: JavaScript calls Rust, Rust returns a value
       function callRustFunction() {
-        const resultDiv = document.getElementById("result");
+        const resultDiv = document.getElementById("result1");
 
-        // Check if the rust object is available (injected by our RenderProcessHandler)
         if (typeof rust !== "undefined" && typeof rust.helloWorld === "function") {
-          // Call the Rust function and display the result
           const message = rust.helloWorld();
-          resultDiv.textContent = message;
+          resultDiv.textContent = "Rust returned: " + message;
         } else {
           resultDiv.textContent = "Error: rust.helloWorld() is not available";
         }
+      }
+
+      // Demo 2: JavaScript calls Rust, then Rust calls JavaScript back
+      function triggerRustCallback() {
+        const resultDiv = document.getElementById("result2");
+        resultDiv.textContent = "Waiting for Rust callback...";
+
+        if (typeof rust !== "undefined" && typeof rust.triggerCallback === "function") {
+          // This calls Rust, which will then call our onRustCallback function
+          rust.triggerCallback();
+        } else {
+          resultDiv.textContent = "Error: rust.triggerCallback() is not available";
+        }
+      }
+
+      // This function will be called by Rust via frame.execute_java_script()
+      function onRustCallback(message) {
+        const resultDiv = document.getElementById("result2");
+        resultDiv.textContent = "Rust called JS: " + message;
       }
     </script>
   </body>
