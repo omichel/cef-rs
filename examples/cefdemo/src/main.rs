@@ -4,9 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-// V8 Handler for the "helloWorld" function callable from JavaScript
+// V8 Handler for all Rust functions callable from JavaScript
 wrap_v8_handler! {
-    struct HelloWorldHandler;
+    struct RustFunctionHandler;
 
     impl V8Handler {
         fn execute(
@@ -17,56 +17,36 @@ wrap_v8_handler! {
             retval: Option<&mut Option<V8Value>>,
             _exception: Option<&mut CefString>,
         ) -> ::std::os::raw::c_int {
-            if let Some(name) = name {
-                let name_str = name.to_string();
-                if name_str == "helloWorld" {
+            let Some(name) = name else { return 0 };
+            let name_str = name.to_string();
+
+            match name_str.as_str() {
+                "helloWorld" => {
                     // Return "Hello World from Rust!" as a string
                     let result_str = CefString::from("Hello World from Rust!");
                     if let Some(retval) = retval {
                         *retval = v8_value_create_string(Some(&result_str));
                     }
-                    return 1; // Success
+                    1
                 }
-            }
-            0 // Not handled
-        }
-    }
-}
-
-// V8 Handler for "triggerCallback" - demonstrates Rust calling JavaScript
-wrap_v8_handler! {
-    struct TriggerCallbackHandler;
-
-    impl V8Handler {
-        fn execute(
-            &self,
-            name: Option<&CefString>,
-            _object: Option<&mut V8Value>,
-            _arguments: Option<&[Option<V8Value>]>,
-            _retval: Option<&mut Option<V8Value>>,
-            _exception: Option<&mut CefString>,
-        ) -> ::std::os::raw::c_int {
-            if let Some(name) = name {
-                let name_str = name.to_string();
-                if name_str == "triggerCallback" {
+                "triggerCallback" => {
                     // Get the current V8 context to access the browser and frame
                     if let Some(context) = v8_context_get_current_context() {
                         if let Some(browser) = context.browser() {
                             if let Some(frame) = browser.main_frame() {
                                 // Call JavaScript function from Rust!
-                                // This executes the onRustCallback function defined in JavaScript
                                 let js_code = CefString::from(
-                                    "onRustCallback('Hello from Rust! This message was sent by calling a JavaScript function from Rust code.');"
+                                    "onRustCallback('JavaScript function called from Rust.');"
                                 );
                                 let script_url = CefString::from("");
                                 frame.execute_java_script(Some(&js_code), Some(&script_url), 0);
                             }
                         }
                     }
-                    return 1; // Success
+                    1
                 }
+                _ => 0, // Not handled
             }
-            0 // Not handled
         }
     }
 }
@@ -85,37 +65,26 @@ wrap_render_process_handler! {
             if let Some(context) = context {
                 // Get the global object (window)
                 if let Some(global) = context.global() {
-                    // Create handlers for our functions
-                    let mut hello_handler = HelloWorldHandler::new();
-                    let mut callback_handler = TriggerCallbackHandler::new();
+                    // Create a single handler for all our functions
+                    let mut handler = RustFunctionHandler::new();
 
                     // Create a "rust" object to namespace our functions
                     if let Some(mut rust_obj) = v8_value_create_object(
                         Option::<&mut V8Accessor>::None,
                         Option::<&mut V8Interceptor>::None,
                     ) {
-                        // Create the helloWorld function (JS calls Rust, Rust returns a value)
-                        let func_name = CefString::from("helloWorld");
-                        if let Some(mut hello_func) =
-                            v8_value_create_function(Some(&func_name), Some(&mut hello_handler))
-                        {
-                            rust_obj.set_value_bykey(
-                                Some(&func_name),
-                                Some(&mut hello_func),
-                                V8Propertyattribute::from(sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE),
-                            );
-                        }
-
-                        // Create the triggerCallback function (JS calls Rust, Rust calls JS back)
-                        let trigger_name = CefString::from("triggerCallback");
-                        if let Some(mut trigger_func) =
-                            v8_value_create_function(Some(&trigger_name), Some(&mut callback_handler))
-                        {
-                            rust_obj.set_value_bykey(
-                                Some(&trigger_name),
-                                Some(&mut trigger_func),
-                                V8Propertyattribute::from(sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE),
-                            );
+                        // Register all functions with the same handler
+                        for func_name in ["helloWorld", "triggerCallback"] {
+                            let name = CefString::from(func_name);
+                            if let Some(mut func) =
+                                v8_value_create_function(Some(&name), Some(&mut handler))
+                            {
+                                rust_obj.set_value_bykey(
+                                    Some(&name),
+                                    Some(&mut func),
+                                    V8Propertyattribute::from(sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE),
+                                );
+                            }
                         }
 
                         // Add the rust object to the global scope (window.rust)
