@@ -4,6 +4,84 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+// V8 Handler for the "helloWorld" function callable from JavaScript
+wrap_v8_handler! {
+    struct HelloWorldHandler;
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            _arguments: Option<&[Option<V8Value>]>,
+            retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            if let Some(name) = name {
+                let name_str = name.to_string();
+                if name_str == "helloWorld" {
+                    // Return "Hello World from Rust!" as a string
+                    let result_str = CefString::from("Hello World from Rust!");
+                    if let Some(retval) = retval {
+                        *retval = v8_value_create_string(Some(&result_str));
+                    }
+                    return 1; // Success
+                }
+            }
+            0 // Not handled
+        }
+    }
+}
+
+// Render Process Handler to inject JavaScript bindings
+wrap_render_process_handler! {
+    struct DemoRenderProcessHandler;
+
+    impl RenderProcessHandler {
+        fn on_context_created(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            context: Option<&mut V8Context>,
+        ) {
+            if let Some(context) = context {
+                // Get the global object (window)
+                if let Some(global) = context.global() {
+                    // Create our handler
+                    let mut handler = HelloWorldHandler::new();
+
+                    // Create a "rust" object to namespace our functions
+                    if let Some(mut rust_obj) = v8_value_create_object(
+                        Option::<&mut V8Accessor>::None,
+                        Option::<&mut V8Interceptor>::None,
+                    ) {
+                        // Create the helloWorld function
+                        let func_name = CefString::from("helloWorld");
+                        if let Some(mut hello_func) =
+                            v8_value_create_function(Some(&func_name), Some(&mut handler))
+                        {
+                            // Add helloWorld to the rust object
+                            rust_obj.set_value_bykey(
+                                Some(&func_name),
+                                Some(&mut hello_func),
+                                V8Propertyattribute::from(sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE),
+                            );
+                        }
+
+                        // Add the rust object to the global scope (window.rust)
+                        let rust_name = CefString::from("rust");
+                        global.set_value_bykey(
+                            Some(&rust_name),
+                            Some(&mut rust_obj),
+                            V8Propertyattribute::from(sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE),
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Configuration for window state persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WindowConfig {
@@ -77,6 +155,11 @@ wrap_app! {
                 self.window.clone(),
                 self.config.clone(),
             ))
+        }
+
+        fn render_process_handler(&self) -> Option<RenderProcessHandler> {
+            // Return our custom render process handler that injects JavaScript bindings
+            Some(DemoRenderProcessHandler::new())
         }
     }
 }

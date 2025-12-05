@@ -1,38 +1,81 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CEF Simple Example</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .container {
-            text-align: center;
-            padding: 2rem;
-        }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .container {
+        text-align: center;
+        padding: 2rem;
+      }
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+      }
+      p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+      }
+      button {
+        background: white;
+        color: #667eea;
+        border: none;
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 1.5rem;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      #result {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        font-size: 1.3rem;
+        min-height: 2rem;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Hello from CEF!</h1>
-        <p>This is a local HTML page loaded in the Chromium Embedded Framework.</p>
+      <h1>Hello from CEF!</h1>
+      <p>This is a local HTML page loaded in the Chromium Embedded Framework.</p>
+      <p>Click the button below to call a Rust function from JavaScript:</p>
+      <button onclick="callRustFunction()">Call Rust Hello World</button>
+      <div id="result"></div>
     </div>
-</body>
+
+    <script>
+      function callRustFunction() {
+        const resultDiv = document.getElementById("result");
+
+        // Check if the rust object is available (injected by our RenderProcessHandler)
+        if (typeof rust !== "undefined" && typeof rust.helloWorld === "function") {
+          // Call the Rust function and display the result
+          const message = rust.helloWorld();
+          resultDiv.textContent = message;
+        } else {
+          resultDiv.textContent = "Error: rust.helloWorld() is not available";
+        }
+      }
+    </script>
+  </body>
 </html>
