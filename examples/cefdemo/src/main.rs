@@ -1,9 +1,62 @@
 use cef::{args::Args, rc::*, *};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+/// Configuration for window state persistence
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WindowConfig {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    maximized: bool,
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            x: 100,
+            y: 100,
+            width: 1024,
+            height: 768,
+            maximized: false,
+        }
+    }
+}
+
+impl WindowConfig {
+    /// Get the config file path in the user's config directory
+    fn config_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|p| p.join("Cresus").join("window.json"))
+    }
+
+    /// Load window configuration from disk
+    fn load() -> Self {
+        Self::config_path()
+            .and_then(|path| fs::read_to_string(&path).ok())
+            .and_then(|content| serde_json::from_str(&content).ok())
+            .unwrap_or_default()
+    }
+
+    /// Save window configuration to disk
+    fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(path) = Self::config_path() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let content = serde_json::to_string_pretty(self)?;
+            fs::write(&path, content)?;
+        }
+        Ok(())
+    }
+}
 
 wrap_app! {
     struct DemoApp {
         window: Arc<Mutex<Option<Window>>>,
+        config: Arc<Mutex<WindowConfig>>,
     }
 
     impl App {
@@ -22,6 +75,7 @@ wrap_app! {
         fn browser_process_handler(&self) -> Option<BrowserProcessHandler> {
             Some(DemoBrowserProcessHandler::new(
                 self.window.clone(),
+                self.config.clone(),
             ))
         }
     }
@@ -30,6 +84,7 @@ wrap_app! {
 wrap_browser_process_handler! {
     struct DemoBrowserProcessHandler {
         window: Arc<Mutex<Option<Window>>>,
+        config: Arc<Mutex<WindowConfig>>,
     }
 
     impl BrowserProcessHandler {
@@ -54,7 +109,7 @@ wrap_browser_process_handler! {
             )
             .expect("Failed to create browser view");
 
-            let mut delegate = DemoWindowDelegate::new(browser_view);
+            let mut delegate = DemoWindowDelegate::new(browser_view, self.config.clone());
             if let Ok(mut window) = self.window.lock() {
                 *window = Some(
                     window_create_top_level(Some(&mut delegate)).expect("Failed to create window"),
@@ -72,6 +127,7 @@ wrap_client! {
 wrap_window_delegate! {
     struct DemoWindowDelegate {
         browser_view: BrowserView,
+        config: Arc<Mutex<WindowConfig>>,
     }
 
     impl ViewDelegate {
@@ -117,7 +173,25 @@ wrap_window_delegate! {
                 let title = CefString::from("Crésus");
                 window.set_title(Some(&title));
 
-                window.show();
+                // Restore window position and size from saved config
+                if let Ok(config) = self.config.lock() {
+                    let bounds = Rect {
+                        x: config.x,
+                        y: config.y,
+                        width: config.width,
+                        height: config.height,
+                    };
+                    window.set_bounds(Some(&bounds));
+
+                    window.show();
+
+                    // Restore maximized state after showing the window
+                    if config.maximized {
+                        window.maximize();
+                    }
+                } else {
+                    window.show();
+                }
             }
         }
 
@@ -141,7 +215,27 @@ wrap_window_delegate! {
             1
         }
 
-        fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+        fn can_close(&self, window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            // Save window position and size before closing (while window is still valid)
+            if let Some(window) = window {
+                if let Ok(mut config) = self.config.lock() {
+                    let is_maximized = window.is_maximized() != 0;
+                    config.maximized = is_maximized;
+
+                    // Only save bounds if not maximized (to preserve the restore size)
+                    if !is_maximized {
+                        let bounds = window.bounds_in_screen();
+                        config.x = bounds.x;
+                        config.y = bounds.y;
+                        config.width = bounds.width;
+                        config.height = bounds.height;
+                    }
+
+                    if let Err(e) = config.save() {
+                        eprintln!("Failed to save window config: {}", e);
+                    }
+                }
+            }
             1
         }
     }
@@ -189,7 +283,8 @@ fn main() {
     let is_browser_process = cmd.has_switch(Some(&switch)) != 1;
 
     let window = Arc::new(Mutex::new(None));
-    let mut app = DemoApp::new(window.clone());
+    let config = Arc::new(Mutex::new(WindowConfig::load()));
+    let mut app = DemoApp::new(window.clone(), config);
 
     let ret = execute_process(
         Some(args.as_main_args()),
