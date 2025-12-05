@@ -97,7 +97,7 @@ wrap_window_delegate! {
                 let exe_path = std::env::current_exe().expect("Failed to get executable path");
                 let exe_dir = exe_path.parent().expect("Failed to get executable directory");
                 let icon_path = exe_dir.join("icons").join("icon.png");
-                
+
                 if let Ok(icon_data) = std::fs::read(&icon_path) {
                     // Set window icon (title bar)
                     if let Some(mut image) = image_create() {
@@ -112,6 +112,10 @@ wrap_window_delegate! {
                         }
                     }
                 }
+
+                // Set window title
+                let title = CefString::from("Crésus");
+                window.set_title(Some(&title));
 
                 window.show();
             }
