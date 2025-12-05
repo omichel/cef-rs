@@ -2,6 +2,7 @@
 name = "cefdemo"
 edition = "2024"
 publish = false
+default-run = "cefdemo"
 
 [[bin]]
 name = "cefdemo"
@@ -27,3 +28,6 @@ plist.workspace = true
 serde.workspace = true
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSApplication", "NSResponder"] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"

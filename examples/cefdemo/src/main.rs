@@ -92,6 +92,27 @@ wrap_window_delegate! {
             if let Some(window) = window {
                 let view = self.browser_view.clone();
                 window.add_child_view(Some(&mut (&view).into()));
+
+                // Load and set the window icons
+                let exe_path = std::env::current_exe().expect("Failed to get executable path");
+                let exe_dir = exe_path.parent().expect("Failed to get executable directory");
+                let icon_path = exe_dir.join("icons").join("icon.png");
+                
+                if let Ok(icon_data) = std::fs::read(&icon_path) {
+                    // Set window icon (title bar)
+                    if let Some(mut image) = image_create() {
+                        if image.add_png(1.0, Some(&icon_data)) != 0 {
+                            window.set_window_icon(Some(&mut image));
+                        }
+                    }
+                    // Set app icon (taskbar)
+                    if let Some(mut image) = image_create() {
+                        if image.add_png(1.0, Some(&icon_data)) != 0 {
+                            window.set_window_app_icon(Some(&mut image));
+                        }
+                    }
+                }
+
                 window.show();
             }
         }

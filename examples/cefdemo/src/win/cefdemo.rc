@@ -1,0 +1,4 @@
+// Windows resource file for cefdemo
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+1 ICON "icon.ico"
