@@ -221,9 +221,78 @@ wrap_browser_process_handler! {
     }
 }
 
+// Keyboard handler to block F12 and Ctrl+Shift+I (DevTools) in release mode
+#[cfg(not(debug_assertions))]
+wrap_keyboard_handler! {
+    struct DemoKeyboardHandler;
+
+    impl KeyboardHandler {
+        fn on_pre_key_event(
+            &self,
+            _browser: Option<&mut Browser>,
+            event: Option<&KeyEvent>,
+            _os_event: Option<&mut sys::MSG>,
+            is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
+        ) -> ::std::os::raw::c_int {
+            if let Some(event) = event {
+                // Block F12 key (windows_key_code 123)
+                if event.windows_key_code == 123 {
+                    if let Some(shortcut) = is_keyboard_shortcut {
+                        *shortcut = 0;
+                    }
+                    return 1; // Event handled, suppress it
+                }
+                // Block Ctrl+Shift+I (windows_key_code 73 = 'I')
+                // EVENTFLAG_SHIFT_DOWN = 2
+                // EVENTFLAG_CONTROL_DOWN = 4
+                const CTRL_SHIFT: u32 = 4 | 2;
+                if event.windows_key_code == 73 && (event.modifiers & CTRL_SHIFT) == CTRL_SHIFT {
+                    if let Some(shortcut) = is_keyboard_shortcut {
+                        *shortcut = 0;
+                    }
+                    return 1; // Event handled, suppress it
+                }
+            }
+            0 // Let other keys pass through
+        }
+    }
+}
+
+// Context menu handler to disable right-click menu in release mode
+#[cfg(not(debug_assertions))]
+wrap_context_menu_handler! {
+    struct DemoContextMenuHandler;
+
+    impl ContextMenuHandler {
+        fn on_before_context_menu(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _params: Option<&mut ContextMenuParams>,
+            model: Option<&mut MenuModel>,
+        ) {
+            // Clear the context menu to disable it entirely
+            if let Some(model) = model {
+                model.clear();
+            }
+        }
+    }
+}
+
 wrap_client! {
     struct DemoClient;
-    impl Client {}
+
+    impl Client {
+        #[cfg(not(debug_assertions))]
+        fn keyboard_handler(&self) -> Option<KeyboardHandler> {
+            Some(DemoKeyboardHandler::new())
+        }
+
+        #[cfg(not(debug_assertions))]
+        fn context_menu_handler(&self) -> Option<ContextMenuHandler> {
+            Some(DemoContextMenuHandler::new())
+        }
+    }
 }
 
 wrap_window_delegate! {
