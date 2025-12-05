@@ -4,6 +4,54 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+#[cfg(windows)]
+mod single_instance;
+
+// Global browser reference for single-instance callback
+#[cfg(windows)]
+static GLOBAL_BROWSER: std::sync::LazyLock<Mutex<Option<Browser>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
+
+// Global window reference for activation
+#[cfg(windows)]
+static GLOBAL_WINDOW: std::sync::LazyLock<Mutex<Option<Window>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
+
+// Task to execute JavaScript callback on UI thread
+#[cfg(windows)]
+wrap_task! {
+    struct SecondInstanceTask {
+        args_json: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            // Execute JavaScript callback
+            if let Ok(browser_guard) = GLOBAL_BROWSER.lock() {
+                if let Some(browser) = browser_guard.as_ref() {
+                    if let Some(frame) = browser.main_frame() {
+                        // Escape the JSON string for JavaScript
+                        let escaped_json = self.args_json.replace('\\', "\\\\").replace('\'', "\\'");
+                        let js_code = CefString::from(format!(
+                            "if (typeof onSecondInstance === 'function') {{ onSecondInstance('{}'); }}",
+                            escaped_json
+                        ).as_str());
+                        let script_url = CefString::from("");
+                        frame.execute_java_script(Some(&js_code), Some(&script_url), 0);
+                    }
+                }
+            }
+
+            // Bring window to focus
+            if let Ok(window_guard) = GLOBAL_WINDOW.lock() {
+                if let Some(window) = window_guard.as_ref() {
+                    window.activate();
+                }
+            }
+        }
+    }
+}
+
 // V8 Handler for all Rust functions callable from JavaScript
 wrap_v8_handler! {
     struct RustFunctionHandler;
@@ -154,6 +202,7 @@ wrap_app! {
     struct DemoApp {
         window: Arc<Mutex<Option<Window>>>,
         config: Arc<Mutex<WindowConfig>>,
+        browser: Arc<Mutex<Option<Browser>>>,
     }
 
     impl App {
@@ -173,6 +222,7 @@ wrap_app! {
             Some(DemoBrowserProcessHandler::new(
                 self.window.clone(),
                 self.config.clone(),
+                self.browser.clone(),
             ))
         }
 
@@ -187,6 +237,7 @@ wrap_browser_process_handler! {
     struct DemoBrowserProcessHandler {
         window: Arc<Mutex<Option<Window>>>,
         config: Arc<Mutex<WindowConfig>>,
+        browser: Arc<Mutex<Option<Browser>>>,
     }
 
     impl BrowserProcessHandler {
@@ -211,11 +262,25 @@ wrap_browser_process_handler! {
             )
             .expect("Failed to create browser view");
 
+            // Store the browser reference in the local Arc (for shutdown check)
+            // Note: The global GLOBAL_BROWSER is set via LifeSpanHandler::on_after_created
+            if let Some(browser) = browser_view.browser() {
+                if let Ok(mut browser_ref) = self.browser.lock() {
+                    *browser_ref = Some(browser);
+                }
+            }
+
             let mut delegate = DemoWindowDelegate::new(browser_view, self.config.clone());
             if let Ok(mut window) = self.window.lock() {
-                *window = Some(
-                    window_create_top_level(Some(&mut delegate)).expect("Failed to create window"),
-                );
+                let created_window = window_create_top_level(Some(&mut delegate)).expect("Failed to create window");
+
+                // Store window in global for task-based access
+                #[cfg(windows)]
+                if let Ok(mut global_window) = GLOBAL_WINDOW.lock() {
+                    *global_window = Some(created_window.clone());
+                }
+
+                *window = Some(created_window);
             }
         }
     }
@@ -279,6 +344,22 @@ wrap_context_menu_handler! {
     }
 }
 
+// Life span handler to capture browser reference when created
+#[cfg(windows)]
+wrap_life_span_handler! {
+    struct DemoLifeSpanHandler;
+
+    impl LifeSpanHandler {
+        fn on_after_created(&self, browser: Option<&mut Browser>) {
+            if let Some(browser) = browser {
+                if let Ok(mut global_browser) = GLOBAL_BROWSER.lock() {
+                    *global_browser = Some(browser.clone());
+                }
+            }
+        }
+    }
+}
+
 wrap_client! {
     struct DemoClient;
 
@@ -291,6 +372,11 @@ wrap_client! {
         #[cfg(not(debug_assertions))]
         fn context_menu_handler(&self) -> Option<ContextMenuHandler> {
             Some(DemoContextMenuHandler::new())
+        }
+
+        #[cfg(windows)]
+        fn life_span_handler(&self) -> Option<LifeSpanHandler> {
+            Some(DemoLifeSpanHandler::new())
         }
     }
 }
@@ -453,9 +539,25 @@ fn main() {
     let switch = CefString::from("type");
     let is_browser_process = cmd.has_switch(Some(&switch)) != 1;
 
+    // Single instance check (only for the browser process on Windows)
+    #[cfg(windows)]
+    let mut single_instance = if is_browser_process {
+        let instance = single_instance::SingleInstance::new();
+        if !instance.is_first_instance() {
+            // This is a second instance - send args to the first instance and exit
+            let args_json = single_instance::get_args_json();
+            single_instance::SingleInstance::send_to_first_instance(&args_json);
+            return;
+        }
+        Some(instance)
+    } else {
+        None
+    };
+
     let window = Arc::new(Mutex::new(None));
     let config = Arc::new(Mutex::new(WindowConfig::load()));
-    let mut app = DemoApp::new(window.clone(), config);
+    let browser: Arc<Mutex<Option<Browser>>> = Arc::new(Mutex::new(None));
+    let mut app = DemoApp::new(window.clone(), config, browser.clone());
 
     let ret = execute_process(
         Some(args.as_main_args()),
@@ -485,7 +587,36 @@ fn main() {
         1
     );
 
+    // Set up single instance message polling (Windows only)
+    #[cfg(windows)]
+    if let Some(ref mut instance) = single_instance {
+        if let Some(receiver) = instance.take_message_receiver() {
+            // Spawn a thread to listen for messages from other instances
+            std::thread::spawn(move || {
+                loop {
+                    // Check for messages from other instances (blocking)
+                    if let Ok(args_json) = receiver.recv() {
+                        // Post a task to the UI thread to execute JavaScript
+                        let mut task = SecondInstanceTask::new(args_json);
+                        post_task(ThreadId::default(), Some(&mut task));
+                    }
+                }
+            });
+        }
+    }
+
     run_message_loop();
+
+    // Clear global references before shutdown (Windows only)
+    #[cfg(windows)]
+    {
+        if let Ok(mut global_browser) = GLOBAL_BROWSER.lock() {
+            *global_browser = None;
+        }
+        if let Ok(mut global_window) = GLOBAL_WINDOW.lock() {
+            *global_window = None;
+        }
+    }
 
     let window = window.lock().expect("Failed to lock window");
     let window = window.as_ref().expect("Window is None");

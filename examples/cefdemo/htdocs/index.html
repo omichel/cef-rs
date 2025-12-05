@@ -88,6 +88,12 @@
         <button onclick="triggerRustCallback()">Call rust.triggerCallback()</button>
         <div id="result2" class="result" onclick="this.textContent=''"></div>
       </div>
+
+      <div class="demo-section">
+        <h2>3. Single Instance</h2>
+        <p>When a second instance of this app is launched, it will be closed and this callback will be triggered:</p>
+        <div id="result3" class="result" onclick="this.textContent=''">Waiting for second instance...</div>
+      </div>
     </div>
 
     <script>
@@ -120,6 +126,19 @@
       function onRustCallback(message) {
         const resultDiv = document.getElementById("result2");
         resultDiv.textContent = "Rust called JS: " + message;
+      }
+
+      // This function will be called when a second instance of the app is launched.
+      // The second instance will close immediately, and the args will be passed here.
+      function onSecondInstance(argsJson) {
+        const resultDiv = document.getElementById("result3");
+        try {
+          const args = JSON.parse(argsJson);
+          resultDiv.textContent = "Second instance launched with args: " + JSON.stringify(args);
+        } catch (e) {
+          resultDiv.textContent = "Second instance launched (args: " + argsJson + ")";
+        }
+        console.log("Second instance detected:", argsJson);
       }
     </script>
   </body>
