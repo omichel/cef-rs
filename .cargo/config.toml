@@ -1,2 +1,2 @@
 [alias]
-dist = "run --release --bin package_cefdemo"
+dist = "run --release --bin package_shell"

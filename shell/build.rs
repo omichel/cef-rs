@@ -4,7 +4,7 @@ use std::path::Path;
 
 #[cfg(windows)]
 fn compile_windows_resources(manifest_dir: &str) {
-    let rc_path = Path::new(manifest_dir).join("src/win/cefdemo.rc");
+    let rc_path = Path::new(manifest_dir).join("src/win/shell.rc");
     if rc_path.exists() {
         let _ = embed_resource::compile(&rc_path, embed_resource::NONE);
     }
@@ -32,7 +32,7 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    // OUT_DIR is something like target/debug/build/cefdemo-xxx/out
+    // OUT_DIR is something like target/debug/build/shell-xxx/out
     // We need to go up to target/debug or target/release
     let out_path = Path::new(&out_dir);
     let target_dir = out_path
@@ -55,8 +55,8 @@ fn main() {
     }
 
     // Copy the Windows manifest file
-    let src_manifest = Path::new(&manifest_dir).join("src/win/cefdemo.exe.manifest");
-    let dst_manifest = target_dir.join("cefdemo.exe.manifest");
+    let src_manifest = Path::new(&manifest_dir).join("src/win/shell.exe.manifest");
+    let dst_manifest = target_dir.join("shell.exe.manifest");
     if src_manifest.exists() {
         fs::copy(&src_manifest, &dst_manifest).expect("Failed to copy manifest file");
     }
@@ -64,8 +64,8 @@ fn main() {
     // Tell Cargo to rerun this script if htdocs, icons, or manifest changes
     println!("cargo:rerun-if-changed=htdocs");
     println!("cargo:rerun-if-changed=icons");
-    println!("cargo:rerun-if-changed=src/win/cefdemo.exe.manifest");
-    println!("cargo:rerun-if-changed=src/win/cefdemo.rc");
+    println!("cargo:rerun-if-changed=src/win/shell.exe.manifest");
+    println!("cargo:rerun-if-changed=src/win/shell.rc");
     println!("cargo:rerun-if-changed=src/win/icon.ico");
 
     // Compile Windows resources (executable icon for File Explorer)

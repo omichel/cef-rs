@@ -1,22 +1,22 @@
 [package]
-name = "cefdemo"
+name = "shell"
 edition = "2024"
 publish = false
-default-run = "cefdemo"
+default-run = "shell"
 
 [[bin]]
-name = "cefdemo"
+name = "shell"
 
 [[bin]]
-name = "cefdemo_helper"
+name = "shell_helper"
 path = "src/mac/helper.rs"
 
 [[bin]]
-name = "bundle_cefdemo"
-path = "src/mac/bundle_cefdemo.rs"
+name = "bundle_shell"
+path = "src/mac/bundle_shell.rs"
 
 [[bin]]
-name = "package_cefdemo"
+name = "package_shell"
 path = "src/package.rs"
 
 [features]

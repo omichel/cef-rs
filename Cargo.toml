@@ -8,7 +8,7 @@ members = [
     "export-cef-dir",
     "sys",
     "cef",
-    "examples/*",
+    "shell",
 ]
 
 [workspace.package]

@@ -2,7 +2,7 @@
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
 
   <!-- https://cef-builds.spotifycdn.com/cef_binary_132.3.2+g4997b2f+chromium-132.0.6834.161_windows64.tar.bz2 -->
-  <!-- This compatibility section is from the standar pre - built binary package, specifically from %CEF_ROOT%/tests/cefdemo/win/compatibility.manifest -->
+  <!-- This compatibility section is from the standar pre - built binary package, specifically from %CEF_ROOT%/tests/cefclient/win/compatibility.manifest -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <!--The ID below indicates application support for Windows Vista -->

@@ -1,4 +1,4 @@
-//! Package cefdemo for Windows distribution
+//! Package shell for Windows distribution
 //! Usage: cargo dist
 
 use std::env;
@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const APP_NAME: &str = "Cresus";
-const EXE_NAME: &str = "cefdemo.exe";
+const EXE_NAME: &str = "shell.exe";
 
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<u64> {
     let mut total_size = 0u64;
@@ -51,12 +51,11 @@ fn main() {
     // Always build release for distribution
     let build_config = "release";
 
-    // Find repository root (go up from examples/cefdemo/src)
+    // Find repository root (go up from shell/src)
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let manifest_path = Path::new(manifest_dir);
     let repo_root = manifest_path
         .parent()
-        .and_then(|p| p.parent())
         .expect("Failed to find repo root");
 
     let cef_path = get_cef_path();
@@ -70,14 +69,14 @@ fn main() {
 
     // Build the application
     println!(
-        "Building cefdemo in {} mode...",
+        "Building shell in {} mode...",
         build_config.to_uppercase()
     );
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("--bin")
-        .arg("cefdemo")
+        .arg("shell")
         .arg("--release");
     cmd.current_dir(repo_root);
 
@@ -107,8 +106,8 @@ fn main() {
     file_count += 1;
 
     if let Ok(size) = copy_file(
-        &target_dir.join("cefdemo.exe.manifest"),
-        &dist_dir.join("cefdemo.exe.manifest"),
+        &target_dir.join("shell.exe.manifest"),
+        &dist_dir.join("shell.exe.manifest"),
     ) {
         if size > 0 {
             total_size += size;
