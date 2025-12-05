@@ -24,7 +24,7 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    // OUT_DIR is something like target/debug/build/cefsimple-xxx/out
+    // OUT_DIR is something like target/debug/build/cefdemo-xxx/out
     // We need to go up to target/debug or target/release
     let out_path = Path::new(&out_dir);
     let target_dir = out_path
@@ -40,13 +40,13 @@ fn main() {
     }
 
     // Copy the Windows manifest file
-    let src_manifest = Path::new(&manifest_dir).join("src/win/cefsimple.exe.manifest");
-    let dst_manifest = target_dir.join("cefsimple.exe.manifest");
+    let src_manifest = Path::new(&manifest_dir).join("src/win/cefdemo.exe.manifest");
+    let dst_manifest = target_dir.join("cefdemo.exe.manifest");
     if src_manifest.exists() {
         fs::copy(&src_manifest, &dst_manifest).expect("Failed to copy manifest file");
     }
 
     // Tell Cargo to rerun this script if htdocs or manifest changes
     println!("cargo:rerun-if-changed=htdocs");
-    println!("cargo:rerun-if-changed=src/win/cefsimple.exe.manifest");
+    println!("cargo:rerun-if-changed=src/win/cefdemo.exe.manifest");
 }
